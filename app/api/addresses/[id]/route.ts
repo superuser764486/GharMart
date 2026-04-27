@@ -6,8 +6,9 @@ import { cookies } from 'next/headers';
 // Update address
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('accessToken')?.value;
@@ -39,7 +40,7 @@ export async function PUT(
     // Verify ownership
     const addressCheck = await query(
       'SELECT customer_id FROM customer_addresses WHERE id = $1',
-      [params.id]
+      [id]
     );
 
     if (addressCheck.rows.length === 0 || addressCheck.rows[0].customer_id !== payload.userId) {
@@ -50,7 +51,7 @@ export async function PUT(
     if (isDefault) {
       await query(
         'UPDATE customer_addresses SET is_default = false WHERE customer_id = $1 AND id != $2',
-        [payload.userId, params.id]
+        [payload.userId, id]
       );
     }
 
@@ -119,7 +120,7 @@ export async function PUT(
     }
 
     updates.push(`updated_at = NOW()`);
-    values.push(params.id);
+    values.push(id);
 
     const result = await query(
       `UPDATE customer_addresses SET ${updates.join(', ')} 
@@ -139,8 +140,9 @@ export async function PUT(
 // Delete address
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('accessToken')?.value;
@@ -157,14 +159,14 @@ export async function DELETE(
     // Verify ownership
     const addressCheck = await query(
       'SELECT customer_id FROM customer_addresses WHERE id = $1',
-      [params.id]
+      [id]
     );
 
     if (addressCheck.rows.length === 0 || addressCheck.rows[0].customer_id !== payload.userId) {
       return NextResponse.json({ error: 'Address not found or unauthorized' }, { status: 404 });
     }
 
-    await query('DELETE FROM customer_addresses WHERE id = $1', [params.id]);
+    await query('DELETE FROM customer_addresses WHERE id = $1', [id]);
 
     return NextResponse.json({ success: true, message: 'Address deleted' }, { status: 200 });
   } catch (error) {

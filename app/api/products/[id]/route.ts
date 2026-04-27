@@ -3,9 +3,11 @@ import { query } from '@/lib/database/connection';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+
     const result = await query(
       `SELECT p.id, p.name, p.slug, p.description, p.price, p.discount_percentage,
               p.image_url, p.rating, p.review_count, p.stock_quantity, p.category_id,
@@ -14,7 +16,7 @@ export async function GET(
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        WHERE p.id = $1 AND p.is_active = true`,
-      [params.id]
+      [id]
     );
 
     if (result.rows.length === 0) {
@@ -30,7 +32,7 @@ export async function GET(
        FROM products p
        WHERE p.category_id = $1 AND p.id != $2 AND p.is_active = true
        LIMIT 4`,
-      [product.category_id, params.id]
+      [product.category_id, id]
     );
 
     return NextResponse.json(

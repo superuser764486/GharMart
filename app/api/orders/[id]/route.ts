@@ -5,9 +5,11 @@ import { cookies } from 'next/headers';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: orderId } = await params;
+
     // Verify authentication
     const cookieStore = await cookies();
     const token = cookieStore.get('accessToken')?.value;
@@ -26,8 +28,6 @@ export async function GET(
         { status: 401 }
       );
     }
-
-    const orderId = params.id;
 
     // Fetch order
     const orderResult = await query(
