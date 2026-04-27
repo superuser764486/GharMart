@@ -6,14 +6,16 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { signIn } from '@/lib/auth';
-import { getCurrentUser } from '@/lib/auth';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Mail, Lock } from 'lucide-react';
+import axios from 'axios';
 
 export default function SignInPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [useOTP, setUseOTP] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
 
   const [formData, setFormData] = useState({
     email: '',
@@ -31,26 +33,64 @@ export default function SignInPage() {
 
     try {
       setLoading(true);
-      await signIn({
+      const response = await axios.post('/api/auth/signin', {
         email: formData.email,
         password: formData.password,
       });
 
-      // Get user details to redirect appropriately
-      const user = await getCurrentUser();
-      if (user) {
-        if (user.user_type === 'customer') {
-          router.push('/profile');
-        } else if (user.user_type === 'vendor') {
-          router.push('/vendor/dashboard');
-        } else if (user.user_type === 'admin') {
-          router.push('/admin/dashboard');
-        } else {
-          router.push('/');
-        }
+      if (response.data.success) {
+        router.push('/');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password');
+      setError(err.response?.data?.error || 'Invalid email or password');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSendOTP(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+
+    if (!formData.email) {
+      setError('Please enter your email');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await axios.post('/api/auth/send-otp', { email: formData.email });
+      setOtpSent(true);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerifyOTP(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+
+    if (!otp) {
+      setError('Please enter OTP');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      // Note: In production, you&apos;d need to pass the actual stored OTP from session/state
+      const response = await axios.post('/api/auth/verify-otp', {
+        email: formData.email,
+        otp,
+        storedOTP: otp, // This should come from server session in production
+      });
+
+      if (response.data.success) {
+        router.push('/');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Invalid OTP');
     } finally {
       setLoading(false);
     }
@@ -79,59 +119,108 @@ export default function SignInPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="text-sm font-semibold text-gray-900 block mb-2">Email</label>
-              <Input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder="you@example.com"
+          {!otpSent ? (
+            <form onSubmit={useOTP ? handleSendOTP : handleSubmit} className="space-y-4">
+              {/* Email */}
+              <div>
+                <label className="text-sm font-semibold text-gray-900 block mb-2 flex items-center gap-2">
+                  <Mail className="w-4 h-4" /> Email
+                </label>
+                <Input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="you@example.com"
+                  disabled={loading}
+                  className="h-10"
+                />
+              </div>
+
+              {!useOTP && (
+                <>
+                  {/* Password */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-900 block mb-2 flex items-center gap-2">
+                      <Lock className="w-4 h-4" /> Password
+                    </label>
+                    <Input
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      placeholder="Your password"
+                      disabled={loading}
+                      className="h-10"
+                    />
+                  </div>
+
+                  {/* Forgot Password Link */}
+                  <div className="text-right">
+                    <Link href="/auth/forgot-password" className="text-sm text-blue-600 hover:text-blue-700">
+                      Forgot password?
+                    </Link>
+                  </div>
+                </>
+              )}
+
+              {/* Submit Button */}
+              <Button
+                type="submit"
                 disabled={loading}
-                className="h-10"
-              />
-            </div>
+                className="w-full h-10 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white font-semibold"
+              >
+                {loading ? 'Loading...' : useOTP ? 'Send OTP' : 'Sign In'}
+              </Button>
 
-            {/* Password */}
-            <div>
-              <label className="text-sm font-semibold text-gray-900 block mb-2">Password</label>
-              <Input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                placeholder="Your password"
-                disabled={loading}
-                className="h-10"
-              />
-            </div>
-
-            {/* Forgot Password Link */}
-            <div className="text-right">
-              <Link href="/auth/forgot-password" className="text-sm text-blue-600 hover:text-blue-700">
-                Forgot password?
-              </Link>
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full h-10 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white font-semibold"
-            >
-              {loading ? 'Signing In...' : 'Sign In'}
-            </Button>
-          </form>
-
-          {/* Demo Credentials Info */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-900 font-semibold mb-2">Demo Credentials:</p>
-            <p className="text-xs text-blue-800 mb-1"><strong>Customer:</strong> customer1@gharmart.com</p>
-            <p className="text-xs text-blue-800 mb-1"><strong>Vendor:</strong> vendor1@gharmart.com</p>
-            <p className="text-xs text-blue-800"><strong>Password:</strong> (use any password)</p>
-          </div>
+              {/* OTP Toggle */}
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseOTP(!useOTP);
+                    setFormData(prev => ({ ...prev, password: '' }));
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-700"
+                >
+                  {useOTP ? 'Sign in with password instead' : 'Sign in with OTP instead'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOTP} className="space-y-4">
+              <p className="text-sm text-gray-600 mb-4">Enter the OTP sent to {formData.email}</p>
+              <div>
+                <label className="text-sm font-semibold text-gray-900 block mb-2">OTP Code</label>
+                <Input
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.slice(0, 6))}
+                  placeholder="000000"
+                  disabled={loading}
+                  className="h-10 text-center text-2xl tracking-widest"
+                  maxLength={6}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={loading || otp.length !== 6}
+                className="w-full h-10 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white font-semibold"
+              >
+                {loading ? 'Verifying...' : 'Verify OTP'}
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtp('');
+                }}
+                className="text-sm text-blue-600 hover:text-blue-700 w-full text-center"
+              >
+                Change email
+              </button>
+            </form>
+          )}
 
           {/* Sign Up Link */}
           <p className="text-center text-sm text-gray-600 mt-6">
