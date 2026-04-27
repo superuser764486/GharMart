@@ -5,19 +5,38 @@ import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MapPin, Search, Star, Clock, Truck } from 'lucide-react';
-import { getPopularShops, getCategories, getUserLocation } from '@/lib/shops';
-import { Shop, Category } from '@/lib/supabase';
+import { MapPin, Search, Star, Clock, Truck, Zap, TrendingUp, ShoppingBag, Heart } from 'lucide-react';
 import Link from 'next/link';
+import axios from 'axios';
+
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  original_price?: number;
+  image_url?: string;
+  category: string;
+  shop_id: string;
+  rating?: number;
+  reviews_count?: number;
+  in_stock: boolean;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  icon?: string;
+  description: string;
+}
 
 export default function Home() {
   const router = useRouter();
-  const [shops, setShops] = useState<Shop[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [locationQuery, setLocationQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<string>('');
 
   useEffect(() => {
     loadInitialData();
@@ -28,22 +47,23 @@ export default function Home() {
       setLoading(true);
 
       // Try to get user location
-      try {
-        const userLocation = await getUserLocation();
-        setLocation(userLocation);
-      } catch (error) {
-        console.log('Geolocation not available, using default location');
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          setUserLocation(`${position.coords.latitude},${position.coords.longitude}`);
+        }, () => {
+          console.log('Location access denied');
+        });
       }
 
-      // Load popular shops
-      const popularShops = await getPopularShops(6);
-      setShops(popularShops);
+      // Load featured products
+      const productsResponse = await axios.get('/api/products?limit=8&featured=true');
+      setProducts(productsResponse.data.products);
 
       // Load categories
-      const allCategories = await getCategories();
-      setCategories(allCategories);
+      const categoriesResponse = await axios.get('/api/categories');
+      setCategories(categoriesResponse.data.categories);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('[v0] Error loading data:', error);
     } finally {
       setLoading(false);
     }
@@ -51,17 +71,18 @@ export default function Home() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    const params = new URLSearchParams();
-    if (searchQuery) params.set('q', searchQuery);
-    if (locationQuery) params.set('location', locationQuery);
-    router.push(`/shops?${params.toString()}`);
+    if (searchQuery.trim()) {
+      router.push(`/products?q=${encodeURIComponent(searchQuery)}`);
+    }
   }
 
   function handleLocationClick() {
-    if (location) {
-      router.push(`/shops?lat=${location.latitude}&lng=${location.longitude}`);
-    } else {
-      alert('Please enable location access or enter a pincode');
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        router.push(`/products?lat=${position.coords.latitude}&lng=${position.coords.longitude}`);
+      }, () => {
+        alert('Please enable location access');
+      });
     }
   }
 
@@ -72,40 +93,31 @@ export default function Home() {
         {/* Hero Section */}
         <section className="px-4 sm:px-6 lg:px-8 py-12 sm:py-20 max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-              Discover Local Shops <span className="text-green-600">Near You</span>
+            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4 text-balance">
+              Fresh Groceries <span className="text-green-600">at Your Doorstep</span>
             </h1>
-            <p className="text-lg text-gray-600 mb-8">
-              Connect with neighborhood businesses, explore local products, and support your community with GharMart
+            <p className="text-lg text-gray-600 mb-8 text-pretty">
+              Order from local shops, get fresh produce and daily essentials delivered to your home with GharMart
             </p>
 
             {/* Search Form */}
-            <form onSubmit={handleSearch} className="max-w-4xl mx-auto">
+            <form onSubmit={handleSearch} className="max-w-3xl mx-auto">
               <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
                   <Input
                     type="text"
-                    placeholder="Search for shops, products..."
+                    placeholder="Search products, brands..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10 h-12 rounded-lg border-gray-300"
                   />
                 </div>
-                <div className="flex-1 relative">
-                  <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Enter pincode or area"
-                    value={locationQuery}
-                    onChange={(e) => setLocationQuery(e.target.value)}
-                    className="pl-10 h-12 rounded-lg border-gray-300"
-                  />
-                </div>
                 <Button
                   type="submit"
-                  className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 h-12 px-8"
+                  className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 h-12 px-8 text-white font-semibold"
                 >
+                  <Search className="w-4 h-4 mr-2" />
                   Search
                 </Button>
               </div>
@@ -120,81 +132,108 @@ export default function Home() {
               </button>
             </form>
 
-            {/* Stats */}
+            {/* Quick Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-16">
               <div className="text-center">
-                <div className="text-4xl font-bold text-green-600 mb-2">500+</div>
-                <p className="text-gray-600">Local Shops</p>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl font-bold text-green-600 mb-2">50+</div>
-                <p className="text-gray-600">Categories</p>
-              </div>
-              <div className="text-center">
                 <div className="text-4xl font-bold text-green-600 mb-2">10K+</div>
+                <p className="text-gray-600">Products Available</p>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-green-600 mb-2">30 min</div>
+                <p className="text-gray-600">Average Delivery</p>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-green-600 mb-2">50K+</div>
                 <p className="text-gray-600">Happy Customers</p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Popular Shops Section */}
+        {/* Featured Products Section */}
         <section className="px-4 sm:px-6 lg:px-8 py-12 max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Popular Local Shops</h2>
-            <p className="text-gray-600">Discover highly-rated businesses in your area</p>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                <Zap className="w-8 h-8 text-yellow-500" />
+                Featured Products
+              </h2>
+              <p className="text-gray-600">Fresh picks chosen just for you</p>
+            </div>
+            <Link href="/products">
+              <Button variant="outline" className="text-blue-600">
+                View All →
+              </Button>
+            </Link>
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-gray-200 rounded-lg h-64 animate-pulse" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="bg-gray-200 rounded-lg h-72 animate-pulse" />
               ))}
             </div>
-          ) : shops.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {shops.map((shop) => (
+          ) : products.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+              {products.map((product) => (
                 <Link
-                  key={shop.id}
-                  href={`/shops/${shop.id}`}
-                  className="bg-white rounded-lg border border-gray-200 hover:shadow-lg transition group"
+                  key={product.id}
+                  href={`/products/${product.id}`}
+                  className="bg-white rounded-lg border border-gray-200 hover:shadow-lg transition group overflow-hidden"
                 >
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-600">
-                          {shop.name}
-                        </h3>
-                        <p className="text-sm text-gray-600">{shop.category}</p>
+                  {/* Product Image */}
+                  <div className="relative h-48 bg-gray-100 overflow-hidden">
+                    {product.image_url ? (
+                      <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition" />
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <ShoppingBag className="w-12 h-12 text-gray-300" />
                       </div>
-                      {shop.is_new && (
-                        <span className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">
-                          New
-                        </span>
+                    )}
+                    {product.original_price && product.original_price > product.price && (
+                      <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">
+                        {Math.round(((product.original_price - product.price) / product.original_price) * 100)}% Off
+                      </div>
+                    )}
+                    {!product.in_stock && (
+                      <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                        <span className="text-white font-semibold">Out of Stock</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Product Info */}
+                  <div className="p-4">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">{product.category}</p>
+                    <h3 className="font-semibold text-gray-900 text-sm group-hover:text-blue-600 line-clamp-2 mb-2">
+                      {product.name}
+                    </h3>
+
+                    {/* Price */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-lg font-bold text-gray-900">₹{product.price.toFixed(2)}</span>
+                      {product.original_price && (
+                        <span className="text-sm text-gray-500 line-through">₹{product.original_price.toFixed(2)}</span>
                       )}
                     </div>
 
-                    <div className="space-y-2 mb-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin className="w-4 h-4" />
-                        <span>{shop.address}</span>
+                    {/* Rating */}
+                    {product.rating && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center">
+                          <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                          <span className="text-sm font-semibold text-gray-900 ml-1">{product.rating}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">({product.reviews_count})</span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Clock className="w-4 h-4" />
-                        <span>{shop.delivery_time_min}-{shop.delivery_time_max} min</span>
-                      </div>
-                    </div>
+                    )}
 
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="font-semibold text-gray-900">{shop.avg_rating.toFixed(1)}</span>
-                      <span className="text-sm text-gray-600">({shop.total_reviews})</span>
-                    </div>
-                  </div>
-
-                  <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 rounded-b-lg">
-                    <Button variant="ghost" className="w-full justify-center text-blue-600 hover:text-blue-700">
-                      View Shop →
+                    {/* Add to Cart Button */}
+                    <Button
+                      disabled={!product.in_stock}
+                      className="w-full mt-3 h-9 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white text-sm disabled:opacity-50"
+                    >
+                      Add to Cart
                     </Button>
                   </div>
                 </Link>
@@ -202,36 +241,33 @@ export default function Home() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-600">No shops available yet</p>
+              <p className="text-gray-600">No products available yet</p>
             </div>
           )}
-
-          <div className="text-center">
-            <Link href="/shops">
-              <Button variant="outline" className="border-2 border-gray-300">
-                View All Shops
-              </Button>
-            </Link>
-          </div>
         </section>
 
-        {/* Popular Categories Section */}
+        {/* Categories Section */}
         <section className="px-4 sm:px-6 lg:px-8 py-12 max-w-7xl mx-auto">
           <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Popular Categories</h2>
-            <p className="text-gray-600">Explore different types of local businesses</p>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+              <ShoppingBag className="w-8 h-8 text-blue-600" />
+              Shop by Category
+            </h2>
+            <p className="text-gray-600">Explore our wide range of product categories</p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {categories.map((category) => (
               <Link
                 key={category.id}
-                href={`/shops?category=${category.name}`}
-                className="bg-white rounded-lg border border-gray-200 hover:shadow-lg transition p-4 text-center group"
+                href={`/products?category=${encodeURIComponent(category.name)}`}
+                className="bg-gradient-to-br from-blue-50 to-green-50 rounded-lg border border-gray-200 hover:shadow-lg transition p-6 text-center group"
               >
                 <div className="text-4xl mb-3 flex justify-center">
-                  {category.icon_url && (
-                    <img src={category.icon_url} alt={category.name} className="w-12 h-12" />
+                  {category.icon ? (
+                    <span>{category.icon}</span>
+                  ) : (
+                    <ShoppingBag className="w-12 h-12 text-gray-400" />
                   )}
                 </div>
                 <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 text-sm">
@@ -243,44 +279,44 @@ export default function Home() {
         </section>
 
         {/* Why Choose GharMart Section */}
-        <section id="why-choose" className="px-4 sm:px-6 lg:px-8 py-12 bg-gray-50">
+        <section id="why-choose" className="px-4 sm:px-6 lg:px-8 py-12 bg-gradient-to-b from-blue-50 to-green-50">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Choose GharMart?</h2>
-              <p className="text-gray-600">Everything you need to connect with local businesses</p>
+              <p className="text-gray-600">The smarter way to shop for groceries</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Search className="w-8 h-8 text-green-600" />
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Zap className="w-8 h-8 text-blue-600" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">Easy Discovery</h3>
-                <p className="text-gray-600 text-sm">Find local shops and services with our powerful search engine</p>
+                <h3 className="font-bold text-lg mb-2">Super Fast</h3>
+                <p className="text-gray-600 text-sm">30-minute delivery to your doorstep</p>
               </div>
 
               <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <MapPin className="w-8 h-8 text-green-600" />
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ShoppingBag className="w-8 h-8 text-blue-600" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">Location-Based</h3>
-                <p className="text-gray-600 text-sm">Discover businesses in your neighborhood and nearby areas</p>
+                <h3 className="font-bold text-lg mb-2">Fresh Quality</h3>
+                <p className="text-gray-600 text-sm">Fresh produce and quality products guaranteed</p>
               </div>
 
               <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Star className="w-8 h-8 text-green-600" />
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <TrendingUp className="w-8 h-8 text-blue-600" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">Reviews & Ratings</h3>
-                <p className="text-gray-600 text-sm">Read authentic reviews from local customers</p>
+                <h3 className="font-bold text-lg mb-2">Best Prices</h3>
+                <p className="text-gray-600 text-sm">Compare prices and save with daily deals</p>
               </div>
 
               <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Truck className="w-8 h-8 text-green-600" />
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Heart className="w-8 h-8 text-blue-600" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">Delivery Options</h3>
-                <p className="text-gray-600 text-sm">Many shops offer home delivery services</p>
+                <h3 className="font-bold text-lg mb-2">Support Local</h3>
+                <p className="text-gray-600 text-sm">Shop from local shops and communities</p>
               </div>
             </div>
           </div>
@@ -288,12 +324,12 @@ export default function Home() {
 
         {/* CTA Section */}
         <section className="px-4 sm:px-6 lg:px-8 py-12 max-w-7xl mx-auto">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Ready to start shopping?</h2>
-            <p className="text-gray-600 mb-8">Join thousands of customers discovering their favorite local shops</p>
-            <Link href="/shops">
-              <Button className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 px-8 h-12">
-                Explore Shops Now
+          <div className="bg-gradient-to-r from-blue-600 to-green-600 rounded-lg p-8 sm:p-12 text-center text-white">
+            <h2 className="text-3xl font-bold mb-4">Start Shopping Today</h2>
+            <p className="text-blue-100 mb-8 text-lg">Get fresh groceries delivered in 30 minutes</p>
+            <Link href="/products">
+              <Button className="bg-white hover:bg-gray-100 text-blue-600 font-semibold px-8 h-12">
+                Browse Products Now
               </Button>
             </Link>
           </div>
