@@ -1,106 +1,90 @@
-# Zustand Cart & Razorpay Checkout Implementation Summary
+# Order Management & Live Tracking Implementation Summary
 
 ## Overview
 
-This document summarizes the complete Zustand-based cart management system and Razorpay payment integration implementation for GharMart.
+This document summarizes the complete Order Management and Live Tracking system implementation for GharMart, enabling customers to view all their orders with real-time status tracking.
 
 ## What Was Built
 
-### 1. **Zustand Cart Store** (`lib/store/cart-store.ts`)
-A global state management solution that replaces session-based cart storage:
-- **State:** Array of cart items with product details
-- **Persistence:** Automatic localStorage sync
-- **Actions:**
-  - `addItem(item)` - Add product to cart
-  - `removeItem(productId)` - Remove from cart
-  - `updateQuantity(productId, qty)` - Adjust quantity
-  - `getTotal()` - Calculate subtotal
-  - `getItemCount()` - Get item count
-  - `clearCart()` - Empty cart (after checkout)
+### 1. **Order List Page** (`/app/orders/page.tsx`)
+Complete order management interface featuring:
+- **Features:**
+  - Paginated list of all customer orders (10 per page)
+  - Filter by order status (pending, confirmed, paid, shipped, delivered, cancelled)
+  - Search orders by order ID
+  - Real-time status indicators with color coding
+  - Order total amounts and creation dates
+  - Quick navigation to detailed tracking
+  - Responsive mobile-first design
+  - Empty state with "Start Shopping" link
 
 **Benefits:**
-- No server round-trip for cart operations
-- Instant UI updates with Zustand reactivity
-- Persists across page refreshes
-- Client-side only (faster than database storage)
+- Clear visibility of all orders
+- Easy filtering and searching
+- Quick access to order details
+- Mobile-friendly interface
 
 ---
 
-### 2. **Enhanced Cart Page** (`app/cart/page.tsx`)
-Complete shopping cart interface with:
+### 2. **Order Detail & Tracking Page** (`/app/orders/[id]/page.tsx`)
+Complete order tracking with visual timeline:
 - **Features:**
-  - Display all items with images, prices, quantities
-  - +/- buttons and input field for quantity adjustment
-  - Remove item button with destructive styling
-  - Promo code input (SAVE10: 10% off, SAVE50: ₹50 off)
-  - Real-time total calculation
-  - Tax (5%) and delivery fee (₹40) calculations
-  - Sticky order summary sidebar
-  - Empty cart state with "Continue Shopping" link
+  - Interactive order status timeline
+  - Visual progress bar showing order progression
+  - Auto-refresh status every 5 seconds (for pending orders)
+  - Manual refresh button for updates
+  - Itemized order breakdown with quantities and prices
+  - Order summary with subtotal, tax, and total
+  - Payment method and order date information
+  - Action buttons: Download Invoice, Contact Support, Cancel Order, Return/Exchange
+  - Back navigation to orders list
 
 - **UI/UX:**
-  - Responsive grid layout (mobile-first)
-  - Promo code validation with feedback
-  - Visual feedback on interactions
-  - Clean Tailwind styling with gradient buttons
+  - Color-coded timeline (yellow→blue→purple→green)
+  - Responsive 2-column layout (desktop) / 1-column (mobile)
+  - Real-time updates without page reload
+  - Clear status messages for each stage
+  - Accessible button grouping and labeling
 
 ---
 
-### 3. **Checkout Flow** (`app/checkout/page.tsx`)
-Multi-step checkout process with address and payment selection:
+### 3. **API Endpoints**
 
-**Step 1 - Address Selection:**
-- Fetches user's saved addresses from `/api/addresses`
-- Radio button selection interface
-- Displays full address details (street, city, state, postal code)
-- Marks default address with badge
-- Add address link if none exist
+#### `GET /api/customer/orders`
+Fetch paginated list of customer orders:
+- **Parameters:** `limit` (default: 10), `offset`, `status` (optional filter)
+- **Authentication:** JWT token required
+- **Returns:** Array of orders with metadata and total count
+- **Usage:** Powers the orders list page with filtering and pagination
 
-**Step 2 - Payment Method:**
-- 4 payment options: Card, UPI, Wallet, COD
-- Visual icons for each method
-- Radio button selection
-
-**Step 3 - Order Confirmation:**
-- Order summary with itemized list
-- Calculations: Subtotal, Tax (5%), Delivery (₹40)
-- Total amount in large text
-- Payment security info box
-
-**Server-Side Logic:**
-- JWT authentication from cookies
-- Creates order in database
-- For Card/UPI/Wallet: Creates Razorpay order
-- For COD: Marks order as confirmed
-- Updates product stock after order creation
+#### `GET /api/customer/orders/[id]/status`
+Fetch detailed order information:
+- **Parameters:** Order ID (from URL)
+- **Authentication:** JWT token required
+- **Returns:** Complete order object with items, status, dates, amounts
+- **Usage:** Powers the order detail page with full tracking info
+- **Security:** Validates customer owns order before returning data
 
 ---
 
-### 4. **Razorpay Integration** (`app/checkout/page.tsx`)
+### 4. **Authentication & Security**
 
-**Payment Flow:**
-1. User selects payment method and address
-2. Click "Pay ₹[amount]" button
-3. Frontend calls `POST /api/orders` to create order
-4. Backend generates Razorpay order ID
-5. Frontend opens Razorpay modal with `Razorpay.js` SDK
-6. User enters payment details and completes transaction
-7. Razorpay returns payment response with signature
-8. Frontend calls `POST /api/orders/verify-payment`
-9. Backend validates signature cryptographically
-10. If valid: Order marked as 'paid', cart cleared, redirect to confirmation
+**Authentication Method:**
+- JWT token stored in `accessToken` cookie
+- Token verified on all API endpoints
+- User ID extracted from JWT payload
+- Customer can only view their own orders
 
-**Security:**
-- HMAC-SHA256 signature verification
-- Server-side secret key protection
-- No payment details exposed to frontend
-- Idempotent payment verification
+**Security Features:**
+- Proper error handling (401 for unauthorized, 404 for not found)
+- Parameterized SQL queries to prevent injection
+- User isolation in database queries
+- No sensitive data exposed in responses
+- Automatic token expiration
 
-**Supported Methods:**
-- Credit/Debit Cards
-- UPI (Google Pay, PhonePe, Paytm)
-- Razorpay Wallet
-- Cash on Delivery (no payment required)
+**Protected Routes:**
+- `/api/customer/orders` - List orders (authenticated users only)
+- `/api/customer/orders/[id]/status` - View order details (owner verification)
 
 ---
 
