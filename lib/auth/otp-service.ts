@@ -1,22 +1,20 @@
-import { authenticator } from 'otplib';
-
 const OTP_WINDOW = 1; // Allow OTP from ±1 time window
 const OTP_LENGTH = 6;
 
 // In-memory OTP store (for demo purposes; use Redis in production)
-const otpStore = new Map<string, { secret: string; createdAt: number; attempts: number; maxAttempts: number }>();
+const otpStore = new Map<string, { otp: string; createdAt: number; attempts: number; maxAttempts: number }>();
 
 // Generate OTP for a user
 export function generateOTP(email: string): string {
-  // Use email as secret for consistent OTP generation
-  const secret = Buffer.from(email).toString('base64');
-  
-  // Generate 6-digit OTP
-  const otp = authenticator.generate(secret);
+  // Generate 6-digit OTP using simple method
+  let otp = '';
+  for (let i = 0; i < OTP_LENGTH; i++) {
+    otp += Math.floor(Math.random() * 10);
+  }
   
   // Store OTP metadata
   otpStore.set(email, {
-    secret,
+    otp,
     createdAt: Date.now(),
     attempts: 0,
     maxAttempts: 5,
@@ -61,8 +59,8 @@ export function verifyOTP(email: string, otp: string, expiryMinutes: number = 10
   // Increment attempts
   otpData.attempts += 1;
   
-  // Verify OTP (using authenticator library)
-  const isValid = authenticator.check(otp, otpData.secret);
+  // Verify OTP by comparing values
+  const isValid = otp === otpData.otp;
   
   if (isValid) {
     // Clear OTP after successful verification
