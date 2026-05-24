@@ -4,10 +4,19 @@ import { verifyToken } from '@/lib/auth/jwt';
 import { cookies } from 'next/headers';
 import Razorpay from 'razorpay';
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || '',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || '',
-});
+function getRazorpayInstance() {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  
+  if (!keyId || !keySecret) {
+    throw new Error('Razorpay credentials not configured');
+  }
+  
+  return new Razorpay({
+    key_id: keyId,
+    key_secret: keySecret,
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,6 +78,7 @@ export async function POST(request: NextRequest) {
 
     // Create Razorpay order if not COD
     if (paymentMethod !== 'cod') {
+      const razorpay = getRazorpayInstance();
       const razorpayOrder = await razorpay.orders.create({
         amount: Math.round(total * 100), // Amount in paise
         currency: 'INR',
