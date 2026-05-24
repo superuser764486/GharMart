@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/Header';
@@ -16,7 +18,7 @@ import {
 } from '@/lib/shops';
 import { Star, MapPin, Clock, Filter, X } from 'lucide-react';
 
-export default function ShopsPage() {
+function ShopsContent() {
   const searchParams = useSearchParams();
   const [shops, setShops] = useState<Shop[]>([]);
   const [filteredShops, setFilteredShops] = useState<Shop[]>([]);
@@ -319,3 +321,12 @@ export default function ShopsPage() {
     </>
   );
 }
+
+export default function ShopsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading shops...</div>}>
+      <ShopsContent />
+    </Suspense>
+  );
+}
+

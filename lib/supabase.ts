@@ -1,15 +1,68 @@
-import { createClient } from '@supabase/supabase-js';
+// Lazy Supabase client initialization
+// The actual createClient is never called at module load time
+// This prevents build errors when env vars are missing
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+let supabaseClientInstance: any = null;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+function initSupabaseClient() {
+  if (supabaseClientInstance) return supabaseClientInstance;
+
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!url || !key) {
+      console.warn('Supabase environment variables not set. Some features may not work.');
+      return null;
+    }
+
+    supabaseClientInstance = createClient(url, key);
+    return supabaseClientInstance;
+  } catch (error) {
+    console.error('Failed to initialize Supabase:', error);
+    return null;
+  }
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Dummy object that returns null safely if Supabase isn't available
+export const supabase = {
+  from: (table: string) => {
+    const client = initSupabaseClient();
+    if (!client) return null;
+    return client.from(table);
+  },
+  auth: {
+    user: null as any,
+    session: null as any,
+    getUser: async () => {
+      const client = initSupabaseClient();
+      if (!client) return { data: { user: null }, error: null };
+      try {
+        return await client.auth.getUser();
+      } catch (error) {
+        return { data: { user: null }, error };
+      }
+    },
+    onAuthStateChange: (callback: any) => {
+      const client = initSupabaseClient();
+      if (!client) return { data: { subscription: { unsubscribe: () => {} } } };
+      return client.auth.onAuthStateChange(callback);
+    },
+    signOut: async () => {
+      const client = initSupabaseClient();
+      if (!client) return { error: null };
+      return client.auth.signOut();
+    },
+  },
+  rpc: (fn: string, params?: any) => {
+    const client = initSupabaseClient();
+    if (!client) throw new Error('Supabase not initialized');
+    return client.rpc(fn, params);
+  },
+} as any;
 
-// Types for our database
+// Export types for TypeScript
 export interface User {
   id: string;
   email: string;

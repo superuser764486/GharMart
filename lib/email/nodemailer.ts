@@ -1,23 +1,31 @@
 import nodemailer from 'nodemailer';
 
-// Create SMTP transporter
-const transporter = nodemailer.createTransport({
-  service: process.env.EMAIL_SERVICE || 'gmail',
-  host: process.env.EMAIL_HOST,
-  port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
+let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
-// Verify connection at startup
-transporter.verify().then(() => {
-  console.log('Email service is ready to send messages');
-}).catch(err => {
-  console.error('Email service verification failed:', err);
-});
+// Lazy initialize transporter
+function getTransporter() {
+  if (transporter) return transporter;
+
+  transporter = nodemailer.createTransport({
+    service: process.env.EMAIL_SERVICE || 'gmail',
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+  });
+
+  // Only verify in production when actually needed
+  if (process.env.NODE_ENV === 'production') {
+    transporter.verify().catch(err => {
+      console.error('Email service verification failed:', err);
+    });
+  }
+
+  return transporter;
+}
 
 // Send email function
 export async function sendEmail({
@@ -42,7 +50,8 @@ export async function sendEmail({
       text: text,
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    const emailTransporter = getTransporter();
+    const info = await emailTransporter.sendMail(mailOptions);
     console.log('Email sent:', info.response);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -131,4 +140,4 @@ export const emailTemplates = {
   }),
 };
 
-export default transporter;
+export default getTransporter;

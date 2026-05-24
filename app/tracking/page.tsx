@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+export const dynamic = 'force-dynamic';
+
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Package, MapPin, Clock, CheckCircle, Truck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
 
-export default function TrackingPage() {
+function TrackingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const orderId = searchParams.get('id')
@@ -172,5 +174,13 @@ export default function TrackingPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function TrackingPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading tracking...</div>}>
+      <TrackingContent />
+    </Suspense>
   )
 }

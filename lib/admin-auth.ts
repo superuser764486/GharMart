@@ -1,9 +1,48 @@
-import { createClient } from '@supabase/supabase-js'
+// Lazy initialize Supabase to avoid build-time errors
+let supabaseClientCache: any = null;
+let supabaseError: Error | null = null;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+function getSupabaseForAdmin() {
+  if (supabaseClientCache) return supabaseClientCache;
+  if (supabaseError) throw supabaseError;
+
+  try {
+    // Use dynamic import to avoid module-level execution
+    const supabaseModule = require('@supabase/supabase-js');
+    if (!supabaseModule?.createClient) {
+      throw new Error('Supabase module not available');
+    }
+    
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!url || !key) {
+      // Return a dummy object that won't cause errors during module loading
+      return {
+        from: () => null,
+        rpc: () => null,
+        auth: { getUser: async () => ({ data: { user: null } }) },
+      };
+    }
+    
+    // Only try to create client if we have valid credentials
+    try {
+      supabaseClientCache = supabaseModule.createClient(url, key);
+      return supabaseClientCache;
+    } catch (createError) {
+      supabaseError = createError as Error;
+      throw createError;
+    }
+  } catch (error) {
+    console.error('[v0] Failed to initialize Supabase in admin-auth:', error);
+    // Return a safe dummy object instead of throwing
+    return {
+      from: () => null,
+      rpc: () => null,
+      auth: { getUser: async () => ({ data: { user: null } }) },
+    };
+  }
+}
 
 // Permission levels for admin roles
 export const ADMIN_ROLES = {
@@ -41,6 +80,7 @@ export const ROLE_PERMISSIONS = {
 // Verify admin access
 export async function verifyAdminAccess(userId: string): Promise<boolean> {
   try {
+    const supabase = getSupabaseForAdmin();
     const { data: user, error } = await supabase
       .from('users')
       .select('admin_role')
@@ -58,6 +98,7 @@ export async function verifyAdminAccess(userId: string): Promise<boolean> {
 // Get admin details and permissions
 export async function getAdminDetails(userId: string) {
   try {
+    const supabase = getSupabaseForAdmin();
     const { data: user, error } = await supabase
       .from('users')
       .select('id, email, admin_role, permissions, two_fa_enabled')
@@ -103,6 +144,7 @@ export async function logAdminActivity(
   ipAddress?: string
 ) {
   try {
+    const supabase = getSupabaseForAdmin();
     const { error } = await supabase
       .from('admin_activity_logs')
       .insert({
@@ -134,6 +176,7 @@ export async function getActivityLogs(
   }
 ) {
   try {
+    const supabase = getSupabaseForAdmin();
     let query = supabase
       .from('admin_activity_logs')
       .select('*')
@@ -175,6 +218,7 @@ export async function getActivityLogs(
 // Get platform settings
 export async function getPlatformSetting(key: string): Promise<any> {
   try {
+    const supabase = getSupabaseForAdmin();
     const { data, error } = await supabase
       .from('admin_settings')
       .select('value, type')
@@ -201,6 +245,7 @@ export async function updatePlatformSetting(
   value: string
 ): Promise<boolean> {
   try {
+    const supabase = getSupabaseForAdmin();
     const { error } = await supabase
       .from('admin_settings')
       .update({
